@@ -398,7 +398,7 @@ if __name__ == "__main__":
     batched_docs = [batch for batch in batched(documents, 50)]
 
     # Connect to Qdrant -- LOCALLY
-    client = QdrantClient(url="http://localhost:6333")
+    # client = QdrantClient(url="http://localhost:6333")
 
     client = QdrantClient(
         url="https://62280a9a-32bb-4d0a-9e6e-99de68406473.us-east-1-1.aws.cloud.qdrant.io",
