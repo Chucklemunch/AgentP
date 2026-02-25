@@ -25,11 +25,10 @@ from http.client import IncompleteRead
 Entrez.email = "charlie.kotula@gmail.com"
 Entrez.api_key = os.getenv('NCBI_API_KEY')
 QDRANT_API_KEY = os.getenv('QDRANT_API_KEY')
-print(Entrez.api_key, QDRANT_API_KEY)
 
 # Configuration
 TEST_MODE = True  # Set to False for full run
-TEST_ARTICLE_COUNT = 500  # Number of articles to process in test mode
+TEST_ARTICLE_COUNT = 2000  # Number of articles to process in test mode
 FULL_ARTICLE_COUNT = 10000  # Number of articles for full run
 
 # Search query for getting relevant research articles
@@ -238,8 +237,11 @@ def chunk_text(cleaned_text, uid, pmcid, title,):
         )
         chunks = splitter.split_text(text)
 
+        # Clean lines that begin with periods
+        cleaned_chunks = [chunk.lstrip(". ") for chunk in chunks]
+
         # Create langchain Documents
-        for i, chunk in enumerate(chunks):
+        for i, chunk in enumerate(cleaned_chunks):
             doc=Document(
                 page_content=chunk,
                 metadata={
@@ -302,53 +304,72 @@ def embed_and_upsert(client, embed_model, document_batch):
     Embeds text chunks and uploads vectors and their associated metadata to Qdrant
     """
     points = []
+    RETRIES = 5
 
     # extract text and metadata
     texts = [doc.page_content for doc in document_batch]
     metadatas = [doc.metadata for doc in document_batch]
 
-    # embed text
-    vectors = embed_model.embed_documents(texts)
 
-    # create points containing embeddings and metadata
-    for vec, doc in zip(vectors, document_batch):
-        # create deterministic identifier for each point
-        point_id = uuid.uuid5(uuid.NAMESPACE_DNS, doc.metadata['chunk_id'])
-        points.append(
-            PointStruct(
-                id=point_id,
-                vector=vec,
-                payload={
-                    **doc.metadata,
-                    'text': doc.page_content
-                }
-            )
+    # Embed text with retries
+    for attempt in range(RETRIES):
+        try:
+            print(f'embedding attempt {attempt+1}/{RETRIES}')
+            vectors = embed_model.embed_documents(texts)
+            # create points containing embeddings and metadata
+            for vec, doc in zip(vectors, document_batch):
+                # create deterministic identifier for each point
+                point_id = uuid.uuid5(uuid.NAMESPACE_DNS, doc.metadata['chunk_id'])
+                points.append(
+                    PointStruct(
+                        id=point_id,
+                        vector=vec,
+                        payload={
+                            **doc.metadata,
+                            'text': doc.page_content
+                        }
+                    )
+                )
+
+            break
+        except Exception as e:
+            print(f'Embedding Failed: {e}')
+
+
+            # upsert points in batches with retries
+    for attempt in range(RETRIES):
+        try:
+            print(f'qdrant upsert attempt {attempt+1}/{RETRIES}')
+
+            # upsert points to qdrant
+            operation_info = client.upsert(
+                collection_name="rehab_collection",
+                wait=True,
+                points=points
         )
+            break
+        except Exception as e:
+            print(f'batch upsert failed: {e}')
 
-    # upsert points to Qdrant
-    operation_info = client.upsert(
-        collection_name="rehab_collection",
-        wait=True,
-        points=points
-    )
 
 def batched(iterable, batch_size):
     for i in range(0, len(iterable), batch_size):
         yield iterable[i : i + batch_size]
 
 if __name__ == "__main__":
-    # Check total articles matching query
+    print('in main function')
+    # check total articles matching query
     total_count = get_total_count(query)
-    print(f'Total articles matching query: {total_count:,}')
+    print(f'total articles matching query: {total_count:,}')
 
-    # Determine how many articles to retrieve
+    # determine how many articles to retrieve
     max_results = TEST_ARTICLE_COUNT if TEST_MODE else FULL_ARTICLE_COUNT
-    max_results = min(max_results, total_count)  # Don't exceed available articles
+    max_results = min(max_results, total_count)  # don't exceed available articles
 
-    mode = "TEST" if TEST_MODE else "FULL"
-    print(f'Running in {mode} mode: retrieving {max_results:,} articles')
+    mode = "test" if TEST_MODE else "full"
+    print(f'running in {mode} mode: retrieving {max_results:,} articles')
 
-    # Create metadata list to be used in multiprocessing
+    # create metadata list to be used in multiprocessing
     metadata = get_ids_with_metadata(query, max_results=max_results)
     print(f'Retrieved {len(metadata)} articles')
 
@@ -359,7 +380,7 @@ if __name__ == "__main__":
 
     # Makes the API calls to get the full texts
     print('getting xmls: process_article')
-    with ThreadPoolExecutor(max_workers=4) as executor:
+    with ThreadPoolExecutor(max_workers=8) as executor:
         futures = [
             executor.submit(
                 process_article,
@@ -395,23 +416,28 @@ if __name__ == "__main__":
 
 
     #### Batching, embedding, and upserting of chunks
-    batched_docs = [batch for batch in batched(documents, 50)]
+    batched_docs = [batch for batch in batched(documents, 32)]
 
     # Connect to Qdrant -- LOCALLY
     # client = QdrantClient(url="http://localhost:6333")
 
     client = QdrantClient(
         url="https://62280a9a-32bb-4d0a-9e6e-99de68406473.us-east-1-1.aws.cloud.qdrant.io",
-        api_key=QDRANT_API_KEY
+        api_key=QDRANT_API_KEY,
+        timeout=30
     )
 
-    client.create_collection(
-        collection_name="rehab_collection",
-        vectors_config=VectorParams(
-            size=3072,
-            distance=Distance.COSINE
+    collection_name = "rehab_collection"
+
+    # Create collection if it doesn't already exist
+    if not client.collection_exists(collection_name):
+        client.create_collection(
+            collection_name="rehab_collection",
+            vectors_config=VectorParams(
+                size=3072,
+                distance=Distance.COSINE
+            )
         )
-    )
 
     # Instantiate embedding model
     embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
@@ -432,6 +458,7 @@ if __name__ == "__main__":
         for future in as_completed(futures):
             try:
                 future.result()
+#                print('point upsert batch complete!')
             except Exception as e:
                 print("batch failed: ", e)
 

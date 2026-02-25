@@ -1,0 +1,17 @@
+# Core dependencies for RAGtime-blues
+# Data preprocessing and API access
+biopython==1.86
+lxml==6.0.2
+requests==2.32.5
+tqdm==4.67.1
+
+# LangChain ecosystem
+langchain-core==1.2.6
+langchain-openai==1.0.1
+langchain-text-splitters==1.1.0
+
+# Vector database
+qdrant-client==1.16.2
+
+# OpenAI API
+openai==2.6.0
