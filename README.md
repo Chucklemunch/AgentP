@@ -1,4 +1,4 @@
-# RAG-against-the-machine (in progress)
+# AgentP (in progress)
 Developing a RAG-based Chat bot for physical therapy and rehabilitation
 
 ### [Helpful RAG tutorial from LangChain](https://docs.langchain.com/oss/python/langchain/rag#expand-for-full-code-snippet)

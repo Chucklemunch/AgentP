@@ -27,7 +27,7 @@ def process_user_input(query: str, embedding_model):
     query_vector = embedding_model.embed_query(query)
     return query_vector
 
-def get_rag_context(client, query_vector, max_docs=100):
+def get_rag_context(client, query_vector, max_docs=50):
     """
        Queries vector database and returns relevant data
 
@@ -86,14 +86,22 @@ if __name__ == "__main__":
     # Conect to Qdrant Client
     qdrant_client = QdrantClient(
         url="https://62280a9a-32bb-4d0a-9e6e-99de68406473.us-east-1-1.aws.cloud.qdrant.io",
-        api_key=QDRANT_API_KEY
+        api_key=QDRANT_API_KEY,
+        timeout=10
     )
 
     # Connect to OpenAI
     openai_client = OpenAI(api_key=OPENAI_API_KEY)
     MODEL = "gpt-3.5-turbo"
 
-    SYSTEM_PROMPT = "You are Perry, a personal physiotherapy assistant with a knack for making your patients feeling understood. You also have a thorough knowledge of the scientific literature on all things related to physiotherapy. Use the provided context from medical literautre to provide evidence based suggestions. If the context doesn't contain context relevant to the question, state that you are unsure and do not have the necessary context to answer the user question responsibly. Lastly, if you are missing context, ask the user follow-up questions that will help you understand their problem more deeply."
+    SYSTEM_PROMPT = """
+    You are Perry, a personal physiotherapy assistant with a knack for making your patients feeling understood.
+    You also have a thorough knowledge of the scientific literature on all things related to physiotherapy.
+    Use the provided context from medical literautre to provide evidence based suggestions.
+    Only provide suggests if the context provided is both related to the question and related to physical therapy and rehabilitation.
+    If you do not have context relevant to the user question, remind them that you are only qualified to give suggestions on matters related to physical therapy and rehabilitation.
+    Lastly, if you are missing context, and the user question is related to physical therapy and rehabilitation, ask the user follow-up questions that will help you understand their problem more deeply.
+    """
 
     # Maintain conversation history for better context -- initialize with system prompt
     history = [
@@ -104,7 +112,7 @@ if __name__ == "__main__":
     embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
 
     # Start chat bot
-    intro = "Hi there :)\nI'm Perry, your personal physiotherapy assistant. How can I help you?"
+    intro = "\n\nHi there :)\n\nI'm Perry, your personal physiotherapy assistant. How can I help you?\n\n"
     print(intro)
 
     while True:
@@ -113,6 +121,9 @@ if __name__ == "__main__":
             user_input = input("Ask me something: ")
             query_vector = process_user_input(user_input, embeddings)
             rag_context = get_rag_context(qdrant_client, query_vector)
+
+            print(f'rag_context: {rag_context}')
+
             enriched_prompt = create_user_prompt(user_input, rag_context)
 
             # only keep most recent question/response pair so as to not exceed context length
@@ -148,10 +159,10 @@ if __name__ == "__main__":
 
 
         except KeyboardInterrupt:
-            print("Goodbye!")
+            print("\n\nGoodbye!\n\n")
             exit(0)
         except EOFError:
-            print("Goodbye!")
+            print("\n\nGoodbye!\n\n")
             exit(0)
 
 
