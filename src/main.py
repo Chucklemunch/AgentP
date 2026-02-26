@@ -9,10 +9,12 @@
 """
 
 import os
-import time
 from qdrant_client import QdrantClient
 from langchain_openai.embeddings import OpenAIEmbeddings
-from openai import OpenAI
+from pydantic_ai import Agent
+from models import PerryResponse
+from utils import get_system_prompt
+import asyncio
 
 def process_user_input(query: str, embedding_model):
     """
@@ -48,9 +50,8 @@ def get_rag_context(client, query_vector, max_docs=50):
     ).model_dump()
 
     results = results['points']
-
     for result in results:
-        context.append(result['payload']['text'])
+        context.append(str(result['payload'])) # Includes metadata
 
     return context
 
@@ -78,6 +79,36 @@ def create_user_prompt(query, rag_context):
 
     return user_prompt
 
+async def chat_loop(agent, qdrant_client, embeddings):
+    # Start chat bot
+    intro = "\n\nHi there :)\n\nI'm Perry, your personal physiotherapy assistant. How can I help you?\n\n"
+    print(intro)
+
+    message_history = []
+
+    while True:
+        try:
+            # Retrieval step -- get user input and fetch relevant context
+            user_input = input("Ask me something: ")
+            query_vector = process_user_input(user_input, embeddings)
+            rag_context = get_rag_context(qdrant_client, query_vector)
+            enriched_prompt = create_user_prompt(user_input, rag_context)
+            print(f'enriched prompt: {enriched_prompt}')
+
+            # Generation step
+            print("\nPerry: ", end="", flush=True)
+            result = await agent.run(enriched_prompt, message_history=message_history)
+            message_history = result.all_messages()
+
+            print(result.output)
+
+        except KeyboardInterrupt:
+            print("\n\nGoodbye!\n\n")
+            exit(0)
+        except EOFError:
+            print("\n\nGoodbye!\n\n")
+            exit(0)
+
 if __name__ == "__main__":
     # Get environment variables
     QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
@@ -90,79 +121,22 @@ if __name__ == "__main__":
         timeout=10
     )
 
-    # Connect to OpenAI
-    openai_client = OpenAI(api_key=OPENAI_API_KEY)
-    MODEL = "gpt-3.5-turbo"
+    # Setup for Pydantic Agent
+    MODEL = "openai:gpt-3.5-turbo"
+    SYSTEM_PROMPT_VERSION = '0.0.2'
+    SYSTEM_PROMPT = get_system_prompt(SYSTEM_PROMPT_VERSION, 'prompt-registry/system-prompts/')
+    print(SYSTEM_PROMPT)
 
-    SYSTEM_PROMPT = """
-    You are Perry, a personal physiotherapy assistant with a knack for making your patients feeling understood.
-    You also have a thorough knowledge of the scientific literature on all things related to physiotherapy.
-    Use the provided context from medical literautre to provide evidence based suggestions.
-    Only provide suggests if the context provided is both related to the question and related to physical therapy and rehabilitation.
-    If you do not have context relevant to the user question, remind them that you are only qualified to give suggestions on matters related to physical therapy and rehabilitation.
-    Lastly, if you are missing context, and the user question is related to physical therapy and rehabilitation, ask the user follow-up questions that will help you understand their problem more deeply.
-    """
-
-    # Maintain conversation history for better context -- initialize with system prompt
-    history = [
-        {"role": "system", "content": SYSTEM_PROMPT}
-    ]
+    #### Create PydanticAI Agent ####
+    agent = Agent(
+        MODEL,
+        system_prompt=SYSTEM_PROMPT,
+        retries=3,
+        output_type=PerryResponse
+    )
 
     # Model for embeddding user query
     embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
 
-    # Start chat bot
-    intro = "\n\nHi there :)\n\nI'm Perry, your personal physiotherapy assistant. How can I help you?\n\n"
-    print(intro)
-
-    while True:
-        try:
-            # Retrieval step -- get user input and fetch relevant context
-            user_input = input("Ask me something: ")
-            query_vector = process_user_input(user_input, embeddings)
-            rag_context = get_rag_context(qdrant_client, query_vector)
-
-            print(f'rag_context: {rag_context}')
-
-            enriched_prompt = create_user_prompt(user_input, rag_context)
-
-            # only keep most recent question/response pair so as to not exceed context length
-            if len(history) == 5:
-                # removes old question/response pair
-                history = [history[i] for i in [0, 3, 4]]
-                print('history shortened')
-
-            history.append({"role": "user", "content": enriched_prompt})
-
-            # Generation step -- make call to model
-            stream = openai_client.chat.completions.create(
-                model=MODEL,
-                messages=history,
-                max_completion_tokens=1000,
-                stream=True
-            )
-
-            # Stream output and collect full response
-            print("\nPerry: ", end="", flush=True)
-            full_response = ""
-            for chunk in stream:
-                if chunk.choices[0].delta.content is not None:
-                    content = chunk.choices[0].delta.content
-                    print(content, end="", flush=True)
-                    full_response += content
-                    time.sleep(0.1)
-            print("\n")
-
-            # Add assistant response to history
-            history.append({"role": "assistant", "content": full_response})
-
-
-
-        except KeyboardInterrupt:
-            print("\n\nGoodbye!\n\n")
-            exit(0)
-        except EOFError:
-            print("\n\nGoodbye!\n\n")
-            exit(0)
-
-
+    # Run chat
+    asyncio.run(chat_loop(agent, qdrant_client, embeddings))
