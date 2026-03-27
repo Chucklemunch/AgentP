@@ -22,7 +22,7 @@ import uuid
 from requests.exceptions import HTTPError
 from http.client import IncompleteRead
 
-Entrez.email = "charlie.kotula@gmail.com"
+Entrez.email = os.getenv('NCBI_EMAIL')
 Entrez.api_key = os.getenv('NCBI_API_KEY')
 QDRANT_API_KEY = os.getenv('QDRANT_API_KEY')
 

@@ -5,6 +5,8 @@ Developing a RAG-based Chat bot for physical therapy and rehabilitation
 
 ### Corpus
 - [PMC Open Access](https://pmc.ncbi.nlm.nih.gov/tools/openftlist/)
+- [APTA Clinical Practice Guidelines](https://www.apta.org/patient-care/evidence-based-practice-resources/cpgs)
+    I need to figure out a way to access these
 
 ### Chunking Strategy
 - [LangChain RecursiveCharacterTextSplitter](https://docs.langchain.com/oss/python/integrations/splitters)
