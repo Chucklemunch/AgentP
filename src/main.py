@@ -13,7 +13,7 @@ from qdrant_client import QdrantClient
 from langchain_openai.embeddings import OpenAIEmbeddings
 from pydantic_ai import Agent
 from models import PerryResponse
-from utils import get_system_prompt
+from utils import get_system_prompt, summarize_messages, format_perry_output
 import asyncio
 
 def process_user_input(query: str, embedding_model):
@@ -29,7 +29,7 @@ def process_user_input(query: str, embedding_model):
     query_vector = embedding_model.embed_query(query)
     return query_vector
 
-def get_rag_context(client, query_vector, max_docs=50):
+def get_rag_context(client, query_vector, max_docs=20):
     """
        Queries vector database and returns relevant data
 
@@ -67,14 +67,14 @@ def create_user_prompt(query, rag_context):
     context = "\n\n".join(rag_context)
 
     user_prompt = f"""
-    ################################
-    Context from medical literature:
+################################
+Context from medical literature:
 
-    {context}
+{context}
 
-    ################################
-    Question: {query}
-    ################################
+################################
+Question: {query}
+################################
     """
 
     return user_prompt
@@ -85,6 +85,7 @@ async def chat_loop(agent, qdrant_client, embeddings):
     print(intro)
 
     message_history = []
+    cumulative_usage = None
 
     while True:
         try:
@@ -93,14 +94,18 @@ async def chat_loop(agent, qdrant_client, embeddings):
             query_vector = process_user_input(user_input, embeddings)
             rag_context = get_rag_context(qdrant_client, query_vector)
             enriched_prompt = create_user_prompt(user_input, rag_context)
-            print(f'enriched prompt: {enriched_prompt}')
 
             # Generation step
             print("\nPerry: ", end="", flush=True)
-            result = await agent.run(enriched_prompt, message_history=message_history)
-            message_history = result.all_messages()
+            result = await agent.run(enriched_prompt, message_history=message_history, usage=cumulative_usage)
 
-            print(result.output)
+            message_history = result.all_messages()
+            cumulative_usage = result.usage()
+
+            formatted_response = format_perry_output(result.output)
+
+            print(formatted_response)
+
 
         except KeyboardInterrupt:
             print("\n\nGoodbye!\n\n")
@@ -118,20 +123,20 @@ if __name__ == "__main__":
     qdrant_client = QdrantClient(
         url="https://62280a9a-32bb-4d0a-9e6e-99de68406473.us-east-1-1.aws.cloud.qdrant.io",
         api_key=QDRANT_API_KEY,
-        timeout=10
+        timeout=60
     )
 
     # Setup for Pydantic Agent
-    MODEL = "openai:gpt-3.5-turbo"
+    MODEL = "openai:gpt-4o"
     SYSTEM_PROMPT_VERSION = '0.0.2'
     SYSTEM_PROMPT = get_system_prompt(SYSTEM_PROMPT_VERSION, 'prompt-registry/system-prompts/')
-    print(SYSTEM_PROMPT)
 
     #### Create PydanticAI Agent ####
     agent = Agent(
         MODEL,
         system_prompt=SYSTEM_PROMPT,
         retries=3,
+        history_processors=[summarize_messages],
         output_type=PerryResponse
     )
 

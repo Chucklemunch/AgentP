@@ -44,8 +44,9 @@ class Recommendation(BaseModel):
     evidence: List[Evidence] = Field(description="A collection of pieces of evidence that support the recommendation.")
 
 class PerryResponse(BaseModel):
-    summary: str = Field(description="A summary of the relevant information that the patient should receive based on their query.")
-    diagnoses: Optional[List[Diagnosis]] = Field(description="One or more diagnoses given to the patient based on their symptoms, if symptoms are described.")
+    acknowledgement: str = Field(description="Acknowledge the users query, making them feel seen and understood in an empathetic tone.")
+    info_summary: str = Field(description="A summary of the relevant information that the patient should receive based on their query.")
+    diagnoses: Optional[List[Diagnosis]] = Field(description="One or more diagnoses given to the patient based on their symptoms, if symptoms are described. Do not give a diagnosis unless there is ample evidence to support it.")
     recommendations: Optional[List[Recommendation]] = Field(description="Recommendations given to the patient based on their inquiries and/or symptoms.")
 
 ####
