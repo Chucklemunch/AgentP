@@ -19,10 +19,6 @@ Developing a RAG-based Chat bot for physical therapy and rehabilitation
 - Qdrant
 - Cluster Endpoint: https://62280a9a-32bb-4d0a-9e6e-99de68406473.us-east-1-1.aws.cloud.qdrant.io
 
-# Production Infrastructure
-- Frontend TBD
-- AWS Lambda for LLM querying
-- AWS Lambda for parsing documents and creating vector database with OpenSearch
-- OpenSearch Serverless for vector index/search
-- Manage with Terraform
-
+# App Structure
+- React + TS Frontend
+- FastAPI Backend
