@@ -24,9 +24,7 @@ export default function ChatWindow({ messages, loading }: ChatWindowProps) {
       {messages.map((msg, i) => (
         <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
           {msg.role === 'perry' && (
-            <div className="w-8 h-8 rounded-full bg-blue-400 text-white flex items-center justify-center text-sm font-bold mr-2 mt-1 shrink-0">
-              P
-            </div>
+            <img src="/agentp.png" className="w-8 h-8 rounded-full mr-2 mt-1 shrink-0 object-cover object-top" alt="Perry" />
           )}
           <div
             className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap shadow-sm ${
@@ -41,9 +39,7 @@ export default function ChatWindow({ messages, loading }: ChatWindowProps) {
       ))}
       {loading && (
         <div className="flex justify-start items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-blue-400 text-white flex items-center justify-center text-sm font-bold shrink-0">
-            P
-          </div>
+          <img src="/agentp.png" className="w-8 h-8 rounded-full shrink-0 object-cover object-top" alt="Perry" />
           <div className="bg-white border border-gray-100 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
             <div className="flex gap-1 items-center h-4">
               <span className="w-2 h-2 bg-blue-300 rounded-full animate-bounce [animation-delay:0ms]" />

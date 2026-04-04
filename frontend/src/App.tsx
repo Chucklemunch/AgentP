@@ -38,9 +38,7 @@ export default function App() {
     <div className="flex flex-col h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center gap-3 shrink-0">
-        <div className="w-9 h-9 rounded-full bg-blue-400 text-white flex items-center justify-center font-bold text-sm">
-          P
-        </div>
+        <img src="/agentp.png" className="w-9 h-9 rounded-full object-cover object-top" alt="Perry" />
         <div>
           <h1 className="text-base font-semibold text-gray-800 leading-tight">Perry</h1>
           <p className="text-xs text-gray-400">Physical Therapy Assistant</p>
