@@ -49,4 +49,7 @@ class PerryResponse(BaseModel):
     diagnoses: Optional[List[Diagnosis]] = Field(description="One or more diagnoses given to the patient based on their symptoms, if symptoms are described. Do not give a diagnosis unless there is ample evidence to support it.")
     recommendations: Optional[List[Recommendation]] = Field(description="Recommendations given to the patient based on their inquiries and/or symptoms.")
 
+class ChatRequest(BaseModel):
+    message: str
+    history: list
 ####
