@@ -4,7 +4,8 @@ Utility functions for improving code modularity
 
 import os
 from models import PerryResponse
-from pydantic_ai import ModelMessage, RunContext, Agent
+from pydantic_ai import RunContext, Agent
+from pydantic_ai.messages import ModelMessage
 
 ### Create agent for summarizing message history ###
 summarizer_agent = Agent(

@@ -12,13 +12,25 @@ import os
 from qdrant_client import QdrantClient
 from langchain_openai.embeddings import OpenAIEmbeddings
 from pydantic_ai import Agent
+from pydantic_ai.messages import ModelMessage
+from pydantic import TypeAdapter
 from models import PerryResponse, ChatRequest
 from utils import get_system_prompt, summarize_messages, format_perry_output
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+history_adapter = TypeAdapter(list[ModelMessage])
 
 
 ### Make API ###
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def process_user_input(query: str, embedding_model):
     """
@@ -118,7 +130,11 @@ async def chat(req: ChatRequest):
 #            query_vector = process_user_input(user_input, embeddings)
 #            rag_context = get_rag_context(qdrant_client, query_vector)
 #            enriched_prompt = create_user_prompt(user_input, rag_context)
-    result = await agent.run(req.message, message_history=req.history)
-    return {"response": format_perry_output(result.output), "history": result.all_messages()}
+    history = history_adapter.validate_python(req.history) if req.history else []
+    result = await agent.run(req.message, message_history=history)
+    return {
+        "response": format_perry_output(result.output),
+        "history": history_adapter.dump_python(result.all_messages(), mode='json')
+    }
 
 
