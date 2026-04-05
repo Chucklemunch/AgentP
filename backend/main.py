@@ -14,10 +14,12 @@ from langchain_openai.embeddings import OpenAIEmbeddings
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage
 from pydantic import TypeAdapter
-from models import PerryResponse, ChatRequest
-from utils import get_system_prompt, summarize_messages, format_perry_output
+from models import ChatRequest
+from utils import get_system_prompt, summarize_messages
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+import json
 
 history_adapter = TypeAdapter(list[ModelMessage])
 
@@ -97,7 +99,7 @@ Question: {query}
 
 # Setup for Pydantic Agent
 MODEL = "openai:gpt-4o"
-SYSTEM_PROMPT_VERSION = '0.0.2'
+SYSTEM_PROMPT_VERSION = '0.0.3'
 SYSTEM_PROMPT = get_system_prompt(SYSTEM_PROMPT_VERSION, 'prompt-registry/system-prompts/')
 
 
@@ -118,7 +120,6 @@ agent = Agent(
     system_prompt=SYSTEM_PROMPT,
     retries=3,
     history_processors=[summarize_messages],
-    output_type=PerryResponse
 )
 
 # Model for embeddding user query
@@ -131,10 +132,14 @@ async def chat(req: ChatRequest):
 #            rag_context = get_rag_context(qdrant_client, query_vector)
 #            enriched_prompt = create_user_prompt(user_input, rag_context)
     history = history_adapter.validate_python(req.history) if req.history else []
-    result = await agent.run(req.message, message_history=history)
-    return {
-        "response": format_perry_output(result.output),
-        "history": history_adapter.dump_python(result.all_messages(), mode='json')
-    }
+
+    async def generate():
+        async with agent.run_stream(req.message, message_history=history) as result:
+            async for text in result.stream_text(delta=True):
+                yield f"data: {json.dumps({'type': 'text', 'chunk': text})}\n\n"
+            history_data = history_adapter.dump_python(result.all_messages(), mode='json')
+            yield f"data: {json.dumps({'type': 'done', 'history': history_data})}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
 
 

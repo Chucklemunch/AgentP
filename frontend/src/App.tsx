@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import ChatWindow from './components/ChatWindow';
 import ChatInput from './components/ChatInput';
-import type { Message, ChatResponse } from './types';
+import type { Message } from './types';
 
 export default function App() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -20,10 +20,45 @@ export default function App() {
       });
 
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
+      if (!res.body) throw new Error('No response body');
 
-      const data: ChatResponse = await res.json();
-      setHistory(data.history);
-      setMessages((prev) => [...prev, { role: 'perry', content: data.response }]);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let streamStarted = false;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const event = JSON.parse(line.slice(6));
+
+          if (event.type === 'text') {
+            if (!streamStarted) {
+              streamStarted = true;
+              setLoading(false);
+              setMessages((prev) => [...prev, { role: 'perry', content: event.chunk }]);
+            } else {
+              setMessages((prev) => {
+                const updated = [...prev];
+                updated[updated.length - 1] = {
+                  ...updated[updated.length - 1],
+                  content: updated[updated.length - 1].content + event.chunk,
+                };
+                return updated;
+              });
+            }
+          } else if (event.type === 'done') {
+            setHistory(event.history);
+          }
+        }
+      }
     } catch (err) {
       setMessages((prev) => [
         ...prev,
@@ -41,7 +76,7 @@ export default function App() {
         <img src="/agentp.png" className="w-9 h-9 rounded-full object-cover object-top" alt="Perry" />
         <div>
           <h1 className="text-base font-semibold text-gray-800 leading-tight">Perry</h1>
-          <p className="text-xs text-gray-400">Physical Therapy Assistant</p>
+          <p className="text-xs text-gray-400">Your Personal Health Assistant</p>
         </div>
       </header>
 

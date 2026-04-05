@@ -58,13 +58,10 @@ Here are some potential diagnoses for you to consider:
 
     perry_response = f"""
 {response.acknowledgement}
-
 {response.info_summary}
-
 {recs_str if recs is not None else ''}
-
 {diags_str if diagnoses is not None else ''}
-    """
+"""
 
     return perry_response
 
@@ -86,7 +83,7 @@ def get_system_prompt(system_prompt_version: str, prompt_reg_dir: str):
 
     # Make prompt path
     prompt_path_dir = prompt_reg_dir + system_prompt_version
-    prompt_path = f'{prompt_path_dir}/{system_prompt_version}.txt'
+    prompt_path = f'{prompt_path_dir}/system_prompt_{system_prompt_version}.md'
 
     # Check if version exists
     if os.path.exists(prompt_path):
