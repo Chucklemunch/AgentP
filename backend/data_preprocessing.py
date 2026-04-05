@@ -31,7 +31,8 @@ TEST_MODE = True  # Set to False for full run
 TEST_ARTICLE_COUNT = 2000  # Number of articles to process in test mode
 FULL_ARTICLE_COUNT = 10000  # Number of articles for full run
 
-# Search query for getting relevant research articles
+# Search queries for getting relevant research articles
+queries = []
 query = """
 (
   rehabilitation OR "physical therapy" OR physiotherapy OR
@@ -52,6 +53,11 @@ query = """
   "practice guideline"[pt]
 )
 """
+
+# Query to retrieve all available full-text JOSPT articles from PMC
+jospt_query = '"The Journal of orthopaedic and sports physical therapy"[Journal]'
+
+queries.extend([query, jospt_query])
 
 def get_total_count(query):
     """
@@ -237,8 +243,9 @@ def chunk_text(cleaned_text, uid, pmcid, title,):
         )
         chunks = splitter.split_text(text)
 
-        # Clean lines that begin with periods
-        cleaned_chunks = [chunk.lstrip(". ") for chunk in chunks]
+        # Clean lines that begin with periods or commas
+        chunks = [chunk.lstrip(". ") for chunk in chunks]
+        cleaned_chunks = [chunk.lstrip(", ") for chunk in chunks]
 
         # Create langchain Documents
         for i, chunk in enumerate(cleaned_chunks):
@@ -299,7 +306,7 @@ def process_article_text(article_dict):
     docs = chunk_text(cleaned_text, uid, pmcid, title)
     return docs
 
-def embed_and_upsert(client, embed_model, document_batch):
+def embed_and_upsert(client, collection_name, embed_model, document_batch):
     """
     Embeds text chunks and uploads vectors and their associated metadata to Qdrant
     """
@@ -343,7 +350,7 @@ def embed_and_upsert(client, embed_model, document_batch):
 
             # upsert points to qdrant
             operation_info = client.upsert(
-                collection_name="rehab_collection",
+                collection_name=collection_name,
                 wait=True,
                 points=points
         )
@@ -359,8 +366,8 @@ def batched(iterable, batch_size):
 if __name__ == "__main__":
     print('in main function')
     # check total articles matching query
-    total_count = get_total_count(query)
-    print(f'total articles matching query: {total_count:,}')
+    total_count = get_total_count(jospt_query)
+    print(f'total articles matching jospt query: {total_count:,}')
 
     # determine how many articles to retrieve
     max_results = TEST_ARTICLE_COUNT if TEST_MODE else FULL_ARTICLE_COUNT
@@ -370,7 +377,7 @@ if __name__ == "__main__":
     print(f'running in {mode} mode: retrieving {max_results:,} articles')
 
     # create metadata list to be used in multiprocessing
-    metadata = get_ids_with_metadata(query, max_results=max_results)
+    metadata = get_ids_with_metadata(jospt_query, max_results=max_results)
     print(f'Retrieved {len(metadata)} articles')
 
     documents = []
@@ -414,25 +421,25 @@ if __name__ == "__main__":
         end_time = time.time()
         print(f'processed {len(documents)} documents in {end_time - start_time} seconds')
 
-
     #### Batching, embedding, and upserting of chunks
     batched_docs = [batch for batch in batched(documents, 32)]
 
     # Connect to Qdrant -- LOCALLY
     # client = QdrantClient(url="http://localhost:6333")
 
+    # Cloud Qdrant Client
     client = QdrantClient(
         url="https://62280a9a-32bb-4d0a-9e6e-99de68406473.us-east-1-1.aws.cloud.qdrant.io",
         api_key=QDRANT_API_KEY,
         timeout=30
     )
 
-    collection_name = "rehab_collection"
+    collection_name = "perry_collection"
 
     # Create collection if it doesn't already exist
     if not client.collection_exists(collection_name):
         client.create_collection(
-            collection_name="rehab_collection",
+            collection_name=collection_name,
             vectors_config=VectorParams(
                 size=3072,
                 distance=Distance.COSINE
@@ -448,8 +455,9 @@ if __name__ == "__main__":
         futures = [
             executor.submit(
                 embed_and_upsert,
-                document_batch=batch,
                 client=client,
+                collection_name=collection_name,
+                document_batch=batch,
                 embed_model=embeddings
             )
             for batch in batched_docs
@@ -467,8 +475,8 @@ if __name__ == "__main__":
     print(f'processed {len(documents)} embedded and upserted in {end_time - start_time} seconds')
 
     # checking db
-    count = client.count(collection_name='rehab_collection', exact=True)
+    count = client.count(collection_name=collection_name, exact=True)
     print('count: ', count)
 
     # wipe db
-    # client.delete_collection('rehab_collection')
+    # client.delete_collection(collection_name)
