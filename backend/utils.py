@@ -93,3 +93,82 @@ def get_system_prompt(system_prompt_version: str, prompt_reg_dir: str):
     return system_prompt
 
 
+
+def process_user_input(query: str, embedding_model):
+    """
+        Takes user text input and converts it into a vector query.
+
+        Arg:
+            query (str): user prompt for LLM
+            embedding_model: model used to embed user input
+    """
+
+
+    query_vector = embedding_model.embed_query(query)
+    return query_vector
+
+def get_rag_context(client, query_vector, collection_name, max_docs=20):
+    """
+       Queries vector database and returns relevant data
+
+       Args:
+            client: Qdrant client used to access vector database
+            query_vector: query vector used to probe vector database
+            max_docs: maximun pieces of context to be retrieved from vecotr database
+    """
+
+    context = []
+
+    # Queries qdrant vector database for relevant context
+    results = client.query_points(
+        collection_name=collection_name,
+        query=query_vector,
+        with_payload=True,
+        limit=max_docs
+    ).model_dump()
+
+    results = results['points']
+    for result in results:
+        context.append(str(result['payload'])) # Includes metadata
+
+    print('RAG CONTEXT: {context}')
+
+    return context
+
+def create_user_prompt(query, rag_context):
+    """
+        Combines user query with retrieved context to make the final prompt
+        that will be passed to the LLM
+
+        Args:
+            query: user prompt
+            rag_context: list of text chunks retrieved from vector database
+    """
+    context = "\n\n".join(rag_context)
+
+    user_prompt = f"""
+################################
+Context from medical literature:
+
+{context}
+
+################################
+Question: {query}
+################################
+    """
+
+    return user_prompt
+
+def create_enriched_prompt(query, embeddings, qdrant_client, collection_name):
+    """
+        Creates enriched prompt for RAG
+
+        Args:
+            query: user prompt
+            embeddings: model used to embed user prompt
+            qdrant_client: Qdrant client for vector DB
+    """
+    query_vector = process_user_input(query, embeddings)
+    rag_context = get_rag_context(qdrant_client, query_vector, collection_name)
+    enriched_prompt = create_user_prompt(query, rag_context)
+    return enriched_prompt
