@@ -90,8 +90,8 @@ def get_system_prompt(system_prompt_version: str, prompt_reg_dir: str):
         with open(prompt_path, 'r') as f:
             system_prompt = f.read()
 
-    return system_prompt
 
+    return system_prompt
 
 
 def process_user_input(query: str, embedding_model):
