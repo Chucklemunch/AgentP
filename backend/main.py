@@ -9,12 +9,13 @@
 """
 
 import os
+from openai import OpenAI
 from qdrant_client import QdrantClient
 from langchain_openai.embeddings import OpenAIEmbeddings
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage
 from pydantic import TypeAdapter
-from models import ChatRequest
+from models import ChatRequest, UseRag
 from utils import (
     get_system_prompt, summarize_messages, create_enriched_prompt
 )
@@ -37,8 +38,8 @@ app.add_middleware(
 )
 # Setup for Pydantic Agent
 MODEL = "openai:gpt-4o"
-SYSTEM_PROMPT_VERSION = '0.0.3'
-SYSTEM_PROMPT = get_system_prompt(SYSTEM_PROMPT_VERSION, 'prompt-registry/system-prompts/')
+SYSTEM_PROMPT_VERSION = "0.0.3"
+SYSTEM_PROMPT = get_system_prompt(SYSTEM_PROMPT_VERSION, 'prompt-registry/perry/system-prompts/')
 
 
 # Get environment variables
@@ -61,29 +62,52 @@ agent = Agent(
     history_processors=[summarize_messages],
 )
 
+### Create OpenAI Client for Routing ###
+client = OpenAI()
+ROUTING_SYSTEM_PROMPT_VERSION = "0.0.0"
+routing_system_prompt = get_system_prompt(ROUTING_SYSTEM_PROMPT_VERSION, "prompt-registry/rag-routing/system-prompts/")
+
 # Model for embeddding user query
 embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
 
 # Define chat endpoint
 @app.post("/chat")
 async def chat(req: ChatRequest):
-    # Get enriched prompt for RAG
-    enriched_prompt = create_enriched_prompt(
-        query=req.message,
-        embeddings=embeddings,
-        qdrant_client=qdrant_client,
-        collection_name=COLLECTION_NAME
-    )
+    prompt = req.message
     history = history_adapter.validate_python(req.history) if req.history else []
 
-    print(enriched_prompt)
-
     # Decide whether to use RAG or standard LLM call
+    response = client.responses.parse(
+        model="gpt-4o-mini-2024-07-18",
+        input=[
+            {
+                "role": "system",
+                "content": routing_system_prompt
+            },
+            {
+                "role": "user",
+                "content": req.message,
+                },
+            ],
+        text_format=UseRag,
+    )
+    use_rag = response.output_parsed.use_rag
+    print(f'SHOULD USE RAG: {use_rag}')
 
+    if use_rag:
+        # Enrich prompt with RAG
+        prompt = create_enriched_prompt(
+            query=req.message,
+            embeddings=embeddings,
+            qdrant_client=qdrant_client,
+            collection_name=COLLECTION_NAME
+        )
+
+        print(prompt)
 
     async def generate():
         #async with agent.run_stream(req.message, message_history=history) as result:
-        async with agent.run_stream(enriched_prompt, message_history=history) as result:
+        async with agent.run_stream(prompt, message_history=history) as result:
             async for text in result.stream_text(delta=True):
                 yield f"data: {json.dumps({'type': 'text', 'chunk': text})}\n\n"
             history_data = history_adapter.dump_python(result.all_messages(), mode='json')

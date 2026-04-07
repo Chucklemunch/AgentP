@@ -3,7 +3,7 @@ This file contains all Pydantic Models used to specify how the LLM should format
 """
 
 from pydantic import BaseModel, Field, AfterValidator, model_validator
-from typing import Optional, Annotated, List
+from typing import Optional, Annotated, List, Literal
 
 
 #### Validators ####
@@ -52,4 +52,7 @@ class PerryResponse(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     history: list
+
+class UseRag(BaseModel):
+    use_rag: bool = Field(description="Whether or not it would be ideal to use RAG to answer the user's query")
 ####
