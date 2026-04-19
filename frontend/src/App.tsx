@@ -1,19 +1,73 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import ChatWindow from './components/ChatWindow';
 import ChatInput from './components/ChatInput';
-import type { Message } from './types';
+import ProgramsPanel from './components/ProgramsPanel';
+import type { ExerciseProgram, Message } from './types';
+
+const API = import.meta.env.VITE_API_URL;
 
 export default function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [history, setHistory] = useState<unknown[]>([]);
   const [loading, setLoading] = useState(false);
+  const [savedPrograms, setSavedPrograms] = useState<ExerciseProgram[]>([]);
+  const [showPanel, setShowPanel] = useState(false);
+
+  useEffect(() => {
+    fetchPrograms();
+  }, []);
+
+  const fetchPrograms = async () => {
+    try {
+      const res = await fetch(`${API}/programs`);
+      if (res.ok) setSavedPrograms(await res.json());
+    } catch {
+      // silently ignore — programs panel will just show empty
+    }
+  };
+
+  const handleSaveProgram = async (program: ExerciseProgram) => {
+    const alreadySaved = savedPrograms.some((p) => p.id === program.id);
+    try {
+      if (alreadySaved) {
+        await fetch(`${API}/programs/${program.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(program),
+        });
+      } else {
+        await fetch(`${API}/programs`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(program),
+        });
+      }
+      await fetchPrograms();
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleUpdateProgram = async (id: string, program: ExerciseProgram) => {
+    await fetch(`${API}/programs/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(program),
+    });
+    await fetchPrograms();
+  };
+
+  const handleDeleteProgram = async (id: string) => {
+    await fetch(`${API}/programs/${id}`, { method: 'DELETE' });
+    await fetchPrograms();
+  };
 
   const handleSend = async (userMessage: string) => {
     setMessages((prev) => [...prev, { role: 'user', content: userMessage }]);
     setLoading(true);
 
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/chat`, {
+      const res = await fetch(`${API}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: userMessage, history }),
@@ -54,12 +108,23 @@ export default function App() {
                 return updated;
               });
             }
+          } else if (event.type === 'exercise_program') {
+            setMessages((prev) => {
+              const updated = [...prev];
+              for (let i = updated.length - 1; i >= 0; i--) {
+                if (updated[i].role === 'perry') {
+                  updated[i] = { ...updated[i], program: event.program };
+                  break;
+                }
+              }
+              return updated;
+            });
           } else if (event.type === 'done') {
             setHistory(event.history);
           }
         }
       }
-    } catch (err) {
+    } catch {
       setMessages((prev) => [
         ...prev,
         { role: 'perry', content: 'Sorry, something went wrong. Please try again.' },
@@ -82,6 +147,20 @@ export default function App() {
           <h1 className="text-base font-semibold text-white leading-tight">Perry</h1>
           <p className="text-xs text-teal-100">Physical Therapy Assistant</p>
         </div>
+        <button
+          onClick={() => setShowPanel(true)}
+          className="relative flex items-center gap-1.5 text-xs font-medium text-teal-100 hover:text-white border border-teal-500/60 hover:border-teal-300 rounded-lg px-3 py-1.5 transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+          My Programs
+          {savedPrograms.length > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-emerald-400 text-white text-[10px] font-bold flex items-center justify-center">
+              {savedPrograms.length}
+            </span>
+          )}
+        </button>
         <div className="flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full bg-emerald-400" />
           <span className="text-xs text-teal-100 font-medium">Online</span>
@@ -90,13 +169,29 @@ export default function App() {
 
       {/* Messages */}
       <main className="flex-1 overflow-hidden max-w-3xl w-full mx-auto flex flex-col">
-        <ChatWindow messages={messages} loading={loading} onSend={handleSend} />
+        <ChatWindow
+          messages={messages}
+          loading={loading}
+          onSend={handleSend}
+          savedPrograms={savedPrograms}
+          onSaveProgram={handleSaveProgram}
+        />
       </main>
 
       {/* Input */}
       <div className="max-w-3xl w-full mx-auto">
         <ChatInput onSend={handleSend} disabled={loading} />
       </div>
+
+      {/* Programs panel */}
+      {showPanel && (
+        <ProgramsPanel
+          programs={savedPrograms}
+          onClose={() => setShowPanel(false)}
+          onUpdate={handleUpdateProgram}
+          onDelete={handleDeleteProgram}
+        />
+      )}
     </div>
   );
 }

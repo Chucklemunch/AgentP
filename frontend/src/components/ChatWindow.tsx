@@ -1,22 +1,25 @@
 import { useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { Message } from '../types';
+import type { ExerciseProgram, Message } from '../types';
+import ProgramCard from './ProgramCard';
 
 interface ChatWindowProps {
   messages: Message[];
   loading: boolean;
   onSend: (message: string) => void;
+  savedPrograms: ExerciseProgram[];
+  onSaveProgram: (program: ExerciseProgram) => void;
 }
 
 const SUGGESTED_PROMPTS = [
-  'I have knee pain after running',
+  'Build me a knee rehabilitation program for post-ACL surgery recovery',
   'Help with lower back exercises',
   'Tips for post-surgery recovery',
   'Shoulder mobility routine',
 ];
 
-export default function ChatWindow({ messages, loading, onSend }: ChatWindowProps) {
+export default function ChatWindow({ messages, loading, onSend, savedPrograms, onSaveProgram }: ChatWindowProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -62,35 +65,44 @@ export default function ChatWindow({ messages, loading, onSend }: ChatWindowProp
               alt="Perry"
             />
           )}
-          <div
-            className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-              msg.role === 'user'
-                ? 'bg-teal-600 text-white rounded-tr-sm shadow-sm'
-                : 'bg-white text-slate-800 rounded-tl-sm border border-slate-100 shadow-sm'
-            }`}
-          >
-            {msg.role === 'user' ? (
-              msg.content
-            ) : (
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-                  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-                  em: ({ children }) => <em className="italic">{children}</em>,
-                  ul: ({ children }) => <ul className="list-disc list-outside pl-4 mb-2 space-y-1">{children}</ul>,
-                  ol: ({ children }) => <ol className="list-decimal list-outside pl-4 mb-2 space-y-1">{children}</ol>,
-                  li: ({ children }) => <li>{children}</li>,
-                  h1: ({ children }) => <h1 className="text-base font-bold mb-1">{children}</h1>,
-                  h2: ({ children }) => <h2 className="text-sm font-bold mb-1">{children}</h2>,
-                  h3: ({ children }) => <h3 className="text-sm font-semibold mb-1">{children}</h3>,
-                  code: ({ children }) => <code className="bg-slate-100 rounded px-1 py-0.5 text-xs font-mono">{children}</code>,
-                  pre: ({ children }) => <pre className="bg-slate-100 rounded p-2 text-xs font-mono overflow-x-auto mb-2">{children}</pre>,
-                  blockquote: ({ children }) => <blockquote className="border-l-2 border-teal-300 pl-3 italic text-slate-600 mb-2">{children}</blockquote>,
-                }}
-              >
-                {msg.content}
-              </ReactMarkdown>
+          <div className={`max-w-[75%] ${msg.role === 'user' ? '' : 'w-full'}`}>
+            <div
+              className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                msg.role === 'user'
+                  ? 'bg-teal-600 text-white rounded-tr-sm shadow-sm'
+                  : 'bg-white text-slate-800 rounded-tl-sm border border-slate-100 shadow-sm'
+              }`}
+            >
+              {msg.role === 'user' ? (
+                msg.content
+              ) : (
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                    strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                    em: ({ children }) => <em className="italic">{children}</em>,
+                    ul: ({ children }) => <ul className="list-disc list-outside pl-4 mb-2 space-y-1">{children}</ul>,
+                    ol: ({ children }) => <ol className="list-decimal list-outside pl-4 mb-2 space-y-1">{children}</ol>,
+                    li: ({ children }) => <li>{children}</li>,
+                    h1: ({ children }) => <h1 className="text-base font-bold mb-1">{children}</h1>,
+                    h2: ({ children }) => <h2 className="text-sm font-bold mb-1">{children}</h2>,
+                    h3: ({ children }) => <h3 className="text-sm font-semibold mb-1">{children}</h3>,
+                    code: ({ children }) => <code className="bg-slate-100 rounded px-1 py-0.5 text-xs font-mono">{children}</code>,
+                    pre: ({ children }) => <pre className="bg-slate-100 rounded p-2 text-xs font-mono overflow-x-auto mb-2">{children}</pre>,
+                    blockquote: ({ children }) => <blockquote className="border-l-2 border-teal-300 pl-3 italic text-slate-600 mb-2">{children}</blockquote>,
+                  }}
+                >
+                  {msg.content}
+                </ReactMarkdown>
+              )}
+            </div>
+            {msg.program && (
+              <ProgramCard
+                program={msg.program}
+                onSave={onSaveProgram}
+                isSaved={savedPrograms.some((p) => p.id === msg.program!.id)}
+              />
             )}
           </div>
         </div>
