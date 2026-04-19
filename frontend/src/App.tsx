@@ -70,23 +70,31 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
+    <div className="flex flex-col h-screen bg-slate-50">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center gap-3 shrink-0">
-        <img src="/agentp.png" className="w-9 h-9 rounded-full object-cover object-top" alt="Perry" />
-        <div>
-          <h1 className="text-base font-semibold text-gray-800 leading-tight">Perry</h1>
-          <p className="text-xs text-gray-400">Your Personal Health Assistant</p>
+      <header className="bg-gradient-to-r from-teal-700 to-teal-600 px-6 py-4 flex items-center gap-3 shrink-0 shadow-md">
+        <img
+          src="/agentp.png"
+          className="w-10 h-10 rounded-full object-cover object-top ring-2 ring-white/40"
+          alt="Perry"
+        />
+        <div className="flex-1">
+          <h1 className="text-base font-semibold text-white leading-tight">Perry</h1>
+          <p className="text-xs text-teal-100">Physical Therapy Assistant</p>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-emerald-400" />
+          <span className="text-xs text-teal-100 font-medium">Online</span>
         </div>
       </header>
 
       {/* Messages */}
       <main className="flex-1 overflow-hidden max-w-3xl w-full mx-auto flex flex-col">
-        <ChatWindow messages={messages} loading={loading} />
+        <ChatWindow messages={messages} loading={loading} onSend={handleSend} />
       </main>
 
       {/* Input */}
-      <div className="max-w-3xl w-full mx-auto w-full">
+      <div className="max-w-3xl w-full mx-auto">
         <ChatInput onSend={handleSend} disabled={loading} />
       </div>
     </div>

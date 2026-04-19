@@ -23,10 +23,10 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
   };
 
   return (
-    <div className="border-t border-gray-200 bg-white px-4 py-3">
-      <div className="flex items-end gap-2 max-w-3xl mx-auto">
+    <div className="border-t border-slate-200 bg-white px-4 pt-3 pb-4 shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
+      <div className="flex items-end gap-2">
         <textarea
-          className="flex-1 resize-none rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent max-h-36 leading-relaxed"
+          className="flex-1 resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent max-h-36 leading-relaxed"
           rows={1}
           placeholder="Describe your symptoms or ask a question..."
           value={input}
@@ -43,7 +43,7 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
         <button
           onClick={handleSend}
           disabled={disabled || !input.trim()}
-          className="shrink-0 w-10 h-10 rounded-xl bg-blue-400 text-white flex items-center justify-center hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="shrink-0 w-10 h-10 rounded-xl bg-teal-600 text-white flex items-center justify-center hover:bg-teal-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           aria-label="Send message"
         >
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
@@ -51,8 +51,9 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
           </svg>
         </button>
       </div>
-      <p className="text-center text-xs text-gray-400 mt-2">
-        Perry can make mistakes. Always consult a licensed healthcare provider.
+      <p className="text-center text-xs text-slate-400 mt-2.5 leading-snug">
+        Perry may make mistakes.{' '}
+        <span className="font-medium text-slate-500">Always consult a licensed healthcare provider.</span>
       </p>
     </div>
   );
