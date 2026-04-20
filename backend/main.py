@@ -76,7 +76,7 @@ routing_system_prompt = get_system_prompt(ROUTING_SYSTEM_PROMPT_VERSION, "prompt
 embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
 
 ### Database ###
-DB_PATH = "programs.db"
+DB_PATH = os.getenv("DB_PATH", "/data/programs.db")
 
 PROGRAM_EXTRACTION_PROMPT = (
     "You extract structured exercise programs from physical therapy assistant responses. "
