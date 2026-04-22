@@ -1,10 +1,13 @@
 import { useState } from 'react';
-import type { Exercise, ExerciseProgram } from '../types';
+import type { Exercise, ExerciseProgram, LibraryExercise } from '../types';
+import ExercisePicker from './ExercisePicker';
 
 interface ProgramCardProps {
   program: ExerciseProgram;
   onSave: (program: ExerciseProgram) => void;
   isSaved: boolean;
+  exercises: LibraryExercise[];
+  onCreateExercise: (data: Omit<LibraryExercise, 'id' | 'is_custom'>) => Promise<LibraryExercise>;
 }
 
 function formatParams(ex: Exercise): string {
@@ -18,17 +21,27 @@ function formatParams(ex: Exercise): string {
   return parts.join(' · ');
 }
 
-export default function ProgramCard({ program, onSave, isSaved }: ProgramCardProps) {
+export default function ProgramCard({ program, onSave, isSaved, exercises, onCreateExercise }: ProgramCardProps) {
   const [expanded, setExpanded] = useState<number | null>(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<ExerciseProgram>(program);
+  const [showPicker, setShowPicker] = useState(false);
 
   const updateExercise = (i: number, field: keyof Exercise, value: string | number | null) => {
     setDraft((prev) => {
-      const exercises = [...prev.exercises];
-      exercises[i] = { ...exercises[i], [field]: value };
-      return { ...prev, exercises };
+      const exs = [...prev.exercises];
+      exs[i] = { ...exs[i], [field]: value };
+      return { ...prev, exercises: exs };
     });
+  };
+
+  const deleteExercise = (i: number) => {
+    setDraft((prev) => ({ ...prev, exercises: prev.exercises.filter((_, idx) => idx !== i) }));
+  };
+
+  const addExercise = (exercise: Exercise) => {
+    setDraft((prev) => ({ ...prev, exercises: [...prev.exercises, exercise] }));
+    setShowPicker(false);
   };
 
   const handleSaveChanges = () => {
@@ -78,15 +91,38 @@ export default function ProgramCard({ program, onSave, isSaved }: ProgramCardPro
             />
           </div>
 
-          <p className="text-xs font-medium text-slate-500 pt-1">Exercises</p>
+          <div className="flex items-center justify-between pt-1">
+            <p className="text-xs font-medium text-slate-500">Exercises</p>
+            <button
+              onClick={() => setShowPicker(true)}
+              className="flex items-center gap-1 text-xs font-medium text-teal-600 hover:text-teal-700 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Add
+            </button>
+          </div>
+
           {draft.exercises.map((ex, i) => (
             <div key={i} className="rounded-lg border border-slate-200 p-3 space-y-2">
-              <input
-                className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent"
-                value={ex.name}
-                onChange={(e) => updateExercise(i, 'name', e.target.value)}
-                placeholder="Exercise name"
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  className="flex-1 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent"
+                  value={ex.name}
+                  onChange={(e) => updateExercise(i, 'name', e.target.value)}
+                  placeholder="Exercise name"
+                />
+                <button
+                  onClick={() => deleteExercise(i)}
+                  className="shrink-0 text-slate-300 hover:text-red-400 transition-colors"
+                  aria-label="Remove exercise"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
               <div className="grid grid-cols-3 gap-2">
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Sets</label>
@@ -179,6 +215,15 @@ export default function ProgramCard({ program, onSave, isSaved }: ProgramCardPro
             Save Changes
           </button>
         </div>
+
+        {showPicker && (
+          <ExercisePicker
+            exercises={exercises}
+            onAdd={addExercise}
+            onClose={() => setShowPicker(false)}
+            onCreateExercise={onCreateExercise}
+          />
+        )}
       </div>
     );
   }

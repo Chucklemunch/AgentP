@@ -83,4 +83,22 @@ class ExerciseProgramExtraction(BaseModel):
         description="True only if the response contains a COMPLETE exercise program with multiple named exercises, specific parameters (sets/reps OR duration), and weekly frequency"
     )
     program: Optional[ExerciseProgram] = Field(default=None)
+
+class LibraryExercise(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    name: str
+    default_sets: Optional[int] = None
+    default_reps: Optional[int] = None
+    default_duration_seconds: Optional[int] = None
+    default_frequency_per_week: int
+    instructions: str
+    is_custom: bool = False
+
+class CreateExerciseRequest(BaseModel):
+    name: str
+    default_sets: Optional[int] = None
+    default_reps: Optional[int] = None
+    default_duration_seconds: Optional[int] = None
+    default_frequency_per_week: int
+    instructions: str
 ####

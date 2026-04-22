@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import ChatWindow from './components/ChatWindow';
 import ChatInput from './components/ChatInput';
 import ProgramsPanel from './components/ProgramsPanel';
-import type { ExerciseProgram, Message } from './types';
+import type { ExerciseProgram, LibraryExercise, Message } from './types';
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -11,10 +11,12 @@ export default function App() {
   const [history, setHistory] = useState<unknown[]>([]);
   const [loading, setLoading] = useState(false);
   const [savedPrograms, setSavedPrograms] = useState<ExerciseProgram[]>([]);
+  const [exercises, setExercises] = useState<LibraryExercise[]>([]);
   const [showPanel, setShowPanel] = useState(false);
 
   useEffect(() => {
     fetchPrograms();
+    fetchExercises();
   }, []);
 
   const fetchPrograms = async () => {
@@ -24,6 +26,28 @@ export default function App() {
     } catch {
       // silently ignore — programs panel will just show empty
     }
+  };
+
+  const fetchExercises = async () => {
+    try {
+      const res = await fetch(`${API}/exercises`);
+      if (res.ok) setExercises(await res.json());
+    } catch {
+      // silently ignore
+    }
+  };
+
+  const handleCreateExercise = async (
+    data: Omit<LibraryExercise, 'id' | 'is_custom'>
+  ): Promise<LibraryExercise> => {
+    const res = await fetch(`${API}/exercises`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const created: LibraryExercise = await res.json();
+    setExercises((prev) => [...prev, created]);
+    return created;
   };
 
   const handleSaveProgram = async (program: ExerciseProgram) => {
@@ -108,12 +132,23 @@ export default function App() {
                 return updated;
               });
             }
+          } else if (event.type === 'program_start') {
+            setMessages((prev) => {
+              const updated = [...prev];
+              for (let i = updated.length - 1; i >= 0; i--) {
+                if (updated[i].role === 'perry') {
+                  updated[i] = { ...updated[i], programLoading: true };
+                  break;
+                }
+              }
+              return updated;
+            });
           } else if (event.type === 'exercise_program') {
             setMessages((prev) => {
               const updated = [...prev];
               for (let i = updated.length - 1; i >= 0; i--) {
                 if (updated[i].role === 'perry') {
-                  updated[i] = { ...updated[i], program: event.program };
+                  updated[i] = { ...updated[i], program: event.program, programLoading: false };
                   break;
                 }
               }
@@ -121,6 +156,9 @@ export default function App() {
             });
           } else if (event.type === 'done') {
             setHistory(event.history);
+            setMessages((prev) =>
+              prev.map((msg) => (msg.programLoading ? { ...msg, programLoading: false } : msg))
+            );
           }
         }
       }
@@ -175,6 +213,8 @@ export default function App() {
           onSend={handleSend}
           savedPrograms={savedPrograms}
           onSaveProgram={handleSaveProgram}
+          exercises={exercises}
+          onCreateExercise={handleCreateExercise}
         />
       </main>
 
@@ -190,6 +230,8 @@ export default function App() {
           onClose={() => setShowPanel(false)}
           onUpdate={handleUpdateProgram}
           onDelete={handleDeleteProgram}
+          exercises={exercises}
+          onCreateExercise={handleCreateExercise}
         />
       )}
     </div>

@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { ExerciseProgram, Message } from '../types';
+import type { ExerciseProgram, LibraryExercise, Message } from '../types';
 import ProgramCard from './ProgramCard';
+import ProgramCardSkeleton from './ProgramCardSkeleton';
 
 interface ChatWindowProps {
   messages: Message[];
@@ -10,6 +11,8 @@ interface ChatWindowProps {
   onSend: (message: string) => void;
   savedPrograms: ExerciseProgram[];
   onSaveProgram: (program: ExerciseProgram) => void;
+  exercises: LibraryExercise[];
+  onCreateExercise: (data: Omit<LibraryExercise, 'id' | 'is_custom'>) => Promise<LibraryExercise>;
 }
 
 const SUGGESTED_PROMPTS = [
@@ -19,7 +22,7 @@ const SUGGESTED_PROMPTS = [
   'Shoulder mobility routine',
 ];
 
-export default function ChatWindow({ messages, loading, onSend, savedPrograms, onSaveProgram }: ChatWindowProps) {
+export default function ChatWindow({ messages, loading, onSend, savedPrograms, onSaveProgram, exercises, onCreateExercise }: ChatWindowProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -97,11 +100,14 @@ export default function ChatWindow({ messages, loading, onSend, savedPrograms, o
                 </ReactMarkdown>
               )}
             </div>
+            {msg.programLoading && <ProgramCardSkeleton />}
             {msg.program && (
               <ProgramCard
                 program={msg.program}
                 onSave={onSaveProgram}
                 isSaved={savedPrograms.some((p) => p.id === msg.program!.id)}
+                exercises={exercises}
+                onCreateExercise={onCreateExercise}
               />
             )}
           </div>

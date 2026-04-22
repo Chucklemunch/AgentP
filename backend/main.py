@@ -24,6 +24,7 @@ from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage
 from qdrant_client import QdrantClient
 
+from exercises import router as exercises_router, init_exercises_table
 from models import ChatRequest, UseRag, ExerciseProgram, ExerciseProgramExtraction
 from utils import (
     get_system_prompt, summarize_messages, get_rag_context, create_user_prompt
@@ -41,6 +42,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(exercises_router)
 
 # Setup for Pydantic Agent
 MODEL = "openai:gpt-4o"
@@ -106,6 +108,7 @@ async def init_db():
 @app.on_event("startup")
 async def startup_event():
     await init_db()
+    await init_exercises_table()
 
 
 async def extract_program_if_present(response_text: str) -> ExerciseProgram | None:
@@ -159,6 +162,7 @@ async def chat(req: ChatRequest):
                 full_response += text
                 yield f"data: {json.dumps({'type': 'text', 'chunk': text})}\n\n"
 
+            yield f"data: {json.dumps({'type': 'program_start'})}\n\n"
             program = await extract_program_if_present(full_response)
             if program:
                 yield f"data: {json.dumps({'type': 'exercise_program', 'program': program.model_dump()})}\n\n"

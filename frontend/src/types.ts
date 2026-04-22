@@ -19,8 +19,20 @@ export interface ExerciseProgram {
   created_at: string;
 }
 
+export interface LibraryExercise {
+  id: string;
+  name: string;
+  default_sets: number | null;
+  default_reps: number | null;
+  default_duration_seconds: number | null;
+  default_frequency_per_week: number;
+  instructions: string;
+  is_custom: boolean;
+}
+
 export interface Message {
   role: 'user' | 'perry';
   content: string;
   program?: ExerciseProgram;
+  programLoading?: boolean;
 }
