@@ -4,7 +4,7 @@
 #
 
 app = 'agentp-backend'
-primary_region = 'ord'
+primary_region = 'iad'
 
 [build]
 
@@ -17,9 +17,9 @@ primary_region = 'ord'
   processes = ['app']
 
 [[vm]]
-  memory = '1gb'
+  memory = '512mb'
   cpus = 1
-  memory_mb = 1024
+  memory_mb = 512
 
 [mounts]
   source = "agentp_data"

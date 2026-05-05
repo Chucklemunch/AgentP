@@ -56,6 +56,20 @@ class ChatRequest(BaseModel):
     message: str
     history: list
 
+class RegisterRequest(BaseModel):
+    email: str
+    username: str
+    password: str
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    username: str
+
 class UseRag(BaseModel):
     use_rag: bool = Field(description="Whether or not it would be ideal to use RAG to answer the user's query")
 

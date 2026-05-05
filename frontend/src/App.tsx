@@ -1,12 +1,29 @@
 import { useEffect, useState } from 'react';
+import AuthScreen from './components/AuthScreen';
 import ChatWindow from './components/ChatWindow';
 import ChatInput from './components/ChatInput';
 import ProgramsPanel from './components/ProgramsPanel';
+import UserMenu from './components/UserMenu';
 import type { ExerciseProgram, LibraryExercise, Message } from './types';
 
 const API = import.meta.env.VITE_API_URL;
+const TOKEN_KEY = 'perry_token';
+const USERNAME_KEY = 'perry_username';
+
+function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const token = localStorage.getItem(TOKEN_KEY);
+  return fetch(url, {
+    ...options,
+    headers: {
+      ...(options.headers as Record<string, string>),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+}
 
 export default function App() {
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY));
+  const [username, setUsername] = useState<string>(() => localStorage.getItem(USERNAME_KEY) ?? '');
   const [messages, setMessages] = useState<Message[]>([]);
   const [history, setHistory] = useState<unknown[]>([]);
   const [loading, setLoading] = useState(false);
@@ -15,13 +32,37 @@ export default function App() {
   const [showPanel, setShowPanel] = useState(false);
 
   useEffect(() => {
-    fetchPrograms();
-    fetchExercises();
-  }, []);
+    if (token) {
+      fetchPrograms();
+      fetchExercises();
+    }
+  }, [token]);
+
+  const handleAuth = (tok: string, uname: string) => {
+    localStorage.setItem(TOKEN_KEY, tok);
+    localStorage.setItem(USERNAME_KEY, uname);
+    setToken(tok);
+    setUsername(uname);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USERNAME_KEY);
+    setToken(null);
+    setUsername('');
+    setMessages([]);
+    setHistory([]);
+    setSavedPrograms([]);
+    setExercises([]);
+    setShowPanel(false);
+  };
+
+  const handle401 = () => handleLogout();
 
   const fetchPrograms = async () => {
     try {
-      const res = await fetch(`${API}/programs`);
+      const res = await apiFetch(`${API}/programs`);
+      if (res.status === 401) { handle401(); return; }
       if (res.ok) setSavedPrograms(await res.json());
     } catch {
       // silently ignore — programs panel will just show empty
@@ -30,7 +71,8 @@ export default function App() {
 
   const fetchExercises = async () => {
     try {
-      const res = await fetch(`${API}/exercises`);
+      const res = await apiFetch(`${API}/exercises`);
+      if (res.status === 401) { handle401(); return; }
       if (res.ok) setExercises(await res.json());
     } catch {
       // silently ignore
@@ -40,11 +82,12 @@ export default function App() {
   const handleCreateExercise = async (
     data: Omit<LibraryExercise, 'id' | 'is_custom'>
   ): Promise<LibraryExercise> => {
-    const res = await fetch(`${API}/exercises`, {
+    const res = await apiFetch(`${API}/exercises`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
+    if (res.status === 401) { handle401(); throw new Error('Unauthorized'); }
     const created: LibraryExercise = await res.json();
     setExercises((prev) => [...prev, created]);
     return created;
@@ -54,17 +97,19 @@ export default function App() {
     const alreadySaved = savedPrograms.some((p) => p.id === program.id);
     try {
       if (alreadySaved) {
-        await fetch(`${API}/programs/${program.id}`, {
+        const res = await apiFetch(`${API}/programs/${program.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(program),
         });
+        if (res.status === 401) { handle401(); return; }
       } else {
-        await fetch(`${API}/programs`, {
+        const res = await apiFetch(`${API}/programs`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(program),
         });
+        if (res.status === 401) { handle401(); return; }
       }
       await fetchPrograms();
     } catch {
@@ -73,16 +118,18 @@ export default function App() {
   };
 
   const handleUpdateProgram = async (id: string, program: ExerciseProgram) => {
-    await fetch(`${API}/programs/${id}`, {
+    const res = await apiFetch(`${API}/programs/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(program),
     });
+    if (res.status === 401) { handle401(); return; }
     await fetchPrograms();
   };
 
   const handleDeleteProgram = async (id: string) => {
-    await fetch(`${API}/programs/${id}`, { method: 'DELETE' });
+    const res = await apiFetch(`${API}/programs/${id}`, { method: 'DELETE' });
+    if (res.status === 401) { handle401(); return; }
     await fetchPrograms();
   };
 
@@ -91,12 +138,13 @@ export default function App() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API}/chat`, {
+      const res = await apiFetch(`${API}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: userMessage, history }),
       });
 
+      if (res.status === 401) { handle401(); return; }
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       if (!res.body) throw new Error('No response body');
 
@@ -172,6 +220,10 @@ export default function App() {
     }
   };
 
+  if (!token) {
+    return <AuthScreen onAuth={handleAuth} />;
+  }
+
   return (
     <div className="flex flex-col h-screen bg-slate-50">
       {/* Header */}
@@ -199,10 +251,7 @@ export default function App() {
             </span>
           )}
         </button>
-        <div className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-emerald-400" />
-          <span className="text-xs text-teal-100 font-medium">Online</span>
-        </div>
+        <UserMenu username={username} onLogout={handleLogout} />
       </header>
 
       {/* Messages */}

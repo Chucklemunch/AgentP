@@ -2,8 +2,9 @@ import os
 from uuid import uuid4
 
 import aiosqlite
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from auth import get_current_user
 from models import LibraryExercise, CreateExerciseRequest
 
 DB_PATH = os.getenv("DB_PATH", "/data/programs.db")
@@ -53,6 +54,12 @@ async def init_exercises_table():
                 is_custom INTEGER NOT NULL DEFAULT 0
             )
         """)
+        # Migration: add user_id column if not present
+        cursor = await db.execute("PRAGMA table_info(exercises)")
+        columns = {row[1] for row in await cursor.fetchall()}
+        if "user_id" not in columns:
+            await db.execute("ALTER TABLE exercises ADD COLUMN user_id TEXT")
+
         cursor = await db.execute("SELECT COUNT(*) FROM exercises WHERE is_custom = 0")
         count = (await cursor.fetchone())[0]
         if count == 0:
@@ -66,24 +73,27 @@ async def init_exercises_table():
 
 
 @router.get("/exercises")
-async def list_exercises(search: str = ""):
+async def list_exercises(search: str = "", user_id: str = Depends(get_current_user)):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         if search:
             cursor = await db.execute(
-                "SELECT * FROM exercises WHERE name LIKE ? ORDER BY is_custom ASC, name ASC",
-                (f"%{search}%",),
+                "SELECT * FROM exercises WHERE (is_custom = 0 OR user_id = ?) AND name LIKE ? "
+                "ORDER BY is_custom ASC, name ASC",
+                (user_id, f"%{search}%"),
             )
         else:
             cursor = await db.execute(
-                "SELECT * FROM exercises ORDER BY is_custom ASC, name ASC"
+                "SELECT * FROM exercises WHERE is_custom = 0 OR user_id = ? "
+                "ORDER BY is_custom ASC, name ASC",
+                (user_id,),
             )
         rows = await cursor.fetchall()
         return [{**dict(row), "is_custom": bool(row["is_custom"])} for row in rows]
 
 
 @router.post("/exercises")
-async def create_exercise(req: CreateExerciseRequest):
+async def create_exercise(req: CreateExerciseRequest, user_id: str = Depends(get_current_user)):
     exercise = LibraryExercise(
         name=req.name,
         default_sets=req.default_sets,
@@ -96,9 +106,10 @@ async def create_exercise(req: CreateExerciseRequest):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
             "INSERT INTO exercises (id, name, default_sets, default_reps, default_duration_seconds, "
-            "default_frequency_per_week, instructions, is_custom) VALUES (?, ?, ?, ?, ?, ?, ?, 1)",
+            "default_frequency_per_week, instructions, is_custom, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)",
             (exercise.id, exercise.name, exercise.default_sets, exercise.default_reps,
-             exercise.default_duration_seconds, exercise.default_frequency_per_week, exercise.instructions),
+             exercise.default_duration_seconds, exercise.default_frequency_per_week,
+             exercise.instructions, user_id),
         )
         await db.commit()
     return exercise

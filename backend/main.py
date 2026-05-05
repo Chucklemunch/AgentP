@@ -14,7 +14,7 @@ import os
 from datetime import datetime
 
 import aiosqlite
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from langchain_openai.embeddings import OpenAIEmbeddings
@@ -24,6 +24,7 @@ from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage
 from qdrant_client import QdrantClient
 
+from auth import router as auth_router, init_users_table, get_current_user
 from exercises import router as exercises_router, init_exercises_table
 from models import ChatRequest, UseRag, ExerciseProgram, ExerciseProgramExtraction
 from utils import (
@@ -42,6 +43,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(auth_router)
 app.include_router(exercises_router)
 
 # Setup for Pydantic Agent
@@ -102,6 +104,11 @@ async def init_db():
                 updated_at TEXT NOT NULL
             )
         """)
+        # Migration: add user_id if not present
+        cursor = await db.execute("PRAGMA table_info(programs)")
+        columns = {row[1] for row in await cursor.fetchall()}
+        if "user_id" not in columns:
+            await db.execute("ALTER TABLE programs ADD COLUMN user_id TEXT")
         await db.commit()
 
 
@@ -109,6 +116,7 @@ async def init_db():
 async def startup_event():
     await init_db()
     await init_exercises_table()
+    await init_users_table()
 
 
 async def extract_program_if_present(response_text: str) -> ExerciseProgram | None:
@@ -131,7 +139,7 @@ async def extract_program_if_present(response_text: str) -> ExerciseProgram | No
 
 # Define chat endpoint
 @app.post("/chat")
-async def chat(req: ChatRequest):
+async def chat(req: ChatRequest, _: str = Depends(get_current_user)):
     prompt = req.message
     history = history_adapter.validate_python(req.history) if req.history else []
 
@@ -176,47 +184,56 @@ async def chat(req: ChatRequest):
 ### Programs CRUD ###
 
 @app.get("/programs")
-async def list_programs():
+async def list_programs(user_id: str = Depends(get_current_user)):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
-        cursor = await db.execute("SELECT data FROM programs ORDER BY created_at DESC")
+        cursor = await db.execute(
+            "SELECT data FROM programs WHERE user_id = ? ORDER BY created_at DESC",
+            (user_id,),
+        )
         rows = await cursor.fetchall()
         return [json.loads(row["data"]) for row in rows]
 
 
 @app.post("/programs")
-async def save_program(program: ExerciseProgram):
+async def save_program(program: ExerciseProgram, user_id: str = Depends(get_current_user)):
     now = datetime.utcnow().isoformat()
     data = program.model_dump()
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
-            "INSERT OR REPLACE INTO programs (id, title, goal, data, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (program.id, program.title, program.goal, json.dumps(data), program.created_at, now),
+            "INSERT OR REPLACE INTO programs (id, title, goal, data, created_at, updated_at, user_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (program.id, program.title, program.goal, json.dumps(data), program.created_at, now, user_id),
         )
         await db.commit()
     return data
 
 
 @app.put("/programs/{program_id}")
-async def update_program(program_id: str, program: ExerciseProgram):
+async def update_program(
+    program_id: str, program: ExerciseProgram, user_id: str = Depends(get_current_user)
+):
     now = datetime.utcnow().isoformat()
     data = program.model_dump()
     async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute("SELECT id FROM programs WHERE id = ?", (program_id,))
+        cursor = await db.execute(
+            "SELECT id FROM programs WHERE id = ? AND user_id = ?", (program_id, user_id)
+        )
         if not await cursor.fetchone():
             raise HTTPException(status_code=404, detail="Program not found")
         await db.execute(
-            "UPDATE programs SET title=?, goal=?, data=?, updated_at=? WHERE id=?",
-            (program.title, program.goal, json.dumps(data), now, program_id),
+            "UPDATE programs SET title=?, goal=?, data=?, updated_at=? WHERE id=? AND user_id=?",
+            (program.title, program.goal, json.dumps(data), now, program_id, user_id),
         )
         await db.commit()
     return data
 
 
 @app.delete("/programs/{program_id}")
-async def delete_program(program_id: str):
+async def delete_program(program_id: str, user_id: str = Depends(get_current_user)):
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("DELETE FROM programs WHERE id = ?", (program_id,))
+        await db.execute(
+            "DELETE FROM programs WHERE id = ? AND user_id = ?", (program_id, user_id)
+        )
         await db.commit()
     return {"deleted": program_id}
